@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.ScanPlay" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">#7C3AED</item><item name="colorPrimaryDark">#5B21B6</item><item name="colorAccent">#FF4D6D</item>
+        <item name="android:statusBarColor">#FFFFFF</item><item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>
