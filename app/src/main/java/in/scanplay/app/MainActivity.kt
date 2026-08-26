@@ -17,7 +17,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var swipe: SwipeRefreshLayout
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var pendingPermission: PermissionRequest? = null
-    private val home = "https://scanplay.in/studio.html"
+    private val home = "https://scanplay.in/?app=1"
 
     private val filePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         val uris = WebChromeClient.FileChooserParams.parseResult(r.resultCode, r.data)
