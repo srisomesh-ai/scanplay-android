@@ -10,6 +10,8 @@ import android.webkit.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 
 class MainActivity : AppCompatActivity() {
@@ -32,6 +34,12 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         web = findViewById(R.id.web); swipe = findViewById(R.id.swipe)
+        // Android 15 draws edge-to-edge: keep web content clear of the status bar and navigation bar
+        ViewCompat.setOnApplyWindowInsetsListener(swipe) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            v.setPadding(bars.left, bars.top, bars.right, bars.bottom); insets
+        }
+        swipe.setBackgroundColor(0xFFFFFFFF.toInt())
         swipe.setColorSchemeColors(0xFF7C3AED.toInt(), 0xFFFF4D6D.toInt())
         swipe.setOnRefreshListener { web.reload() }
 
