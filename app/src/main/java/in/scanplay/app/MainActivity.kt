@@ -52,7 +52,9 @@ class MainActivity : AppCompatActivity() {
             allowFileAccess = true; loadWithOverviewMode = true; useWideViewPort = true
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             userAgentString = userAgentString + " ScanPlayApp/1.0"
+            javaScriptCanOpenWindowsAutomatically = true; setSupportMultipleWindows(true)
         }
+        CookieManager.getInstance().setAcceptCookie(true); CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
         WebView.setWebContentsDebuggingEnabled(false)
         web.addJavascriptInterface(object {
             @JavascriptInterface fun shareImage(b64: String, text: String) {
@@ -68,9 +70,19 @@ class MainActivity : AppCompatActivity() {
 
         web.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                val u = request.url
-                return if (u.host == "scanplay.in" || u.host?.endsWith(".scanplay.in") == true) false
-                else { startActivity(Intent(Intent.ACTION_VIEW, u)); true }   // WhatsApp, Razorpay UPI apps, Drive etc.
+                val u = request.url; val scheme = u.scheme ?: ""; val host = u.host ?: ""
+                // App schemes (UPI apps, WhatsApp, tel, mail, intent) -> hand to the OS
+                if (scheme !in listOf("http", "https")) {
+                    try { startActivity(Intent(Intent.ACTION_VIEW, u)) } catch (e: Exception) {
+                        if (scheme == "intent") { try { val i = Intent.parseUri(u.toString(), Intent.URI_INTENT_SCHEME); val fb = i.getStringExtra("browser_fallback_url"); if (fb != null) view.loadUrl(fb) else startActivity(i) } catch (_: Exception) {} }
+                    }
+                    return true
+                }
+                // WhatsApp / Play Store / Drive / Maps -> external apps
+                val external = listOf("wa.me", "api.whatsapp.com", "web.whatsapp.com", "play.google.com", "drive.google.com", "maps.google.com")
+                if (external.any { host == it || host.endsWith(".$it") }) { startActivity(Intent(Intent.ACTION_VIEW, u)); return true }
+                // Everything else (scanplay.in, Razorpay, bank net-banking pages, YouTube embeds) stays inside the WebView
+                return false
             }
             override fun onPageFinished(view: WebView, url: String) { swipe.isRefreshing = false; swipe.isEnabled = !url.contains("view.html") }
         }
@@ -80,6 +92,12 @@ class MainActivity : AppCompatActivity() {
                     if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) request.grant(request.resources)
                     else { pendingPermission = request; cameraPermission.launch(Manifest.permission.CAMERA) }
                 } else request.deny()
+            }
+            override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean {
+                // Razorpay / bank pages that open a new window: load them in the same WebView
+                val transport = resultMsg.obj as WebView.WebViewTransport
+                val tmp = WebView(this@MainActivity); tmp.webViewClient = object : WebViewClient() { override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest): Boolean { web.loadUrl(r.url.toString()); return true } }
+                transport.webView = tmp; resultMsg.sendToTarget(); return true
             }
             override fun onShowFileChooser(w: WebView, cb: ValueCallback<Array<Uri>>, p: FileChooserParams): Boolean {   // photo/video uploads
                 fileCallback?.onReceiveValue(null); fileCallback = cb
