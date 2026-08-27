@@ -7,6 +7,9 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.webkit.*
+import android.util.Base64
+import androidx.core.content.FileProvider
+import java.io.File
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -51,6 +54,17 @@ class MainActivity : AppCompatActivity() {
             userAgentString = userAgentString + " ScanPlayApp/1.0"
         }
         WebView.setWebContentsDebuggingEnabled(false)
+        web.addJavascriptInterface(object {
+            @JavascriptInterface fun shareImage(b64: String, text: String) {
+                try {
+                    val dir = File(cacheDir, "share").apply { mkdirs() }
+                    val f = File(dir, "scanplay-share.jpg"); f.writeBytes(Base64.decode(b64, Base64.DEFAULT))
+                    val uri = FileProvider.getUriForFile(this@MainActivity, "$packageName.fileprovider", f)
+                    val i = Intent(Intent.ACTION_SEND).apply { type = "image/jpeg"; putExtra(Intent.EXTRA_STREAM, uri); putExtra(Intent.EXTRA_TEXT, text); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                    runOnUiThread { startActivity(Intent.createChooser(i, "Share")) }
+                } catch (e: Exception) { runOnUiThread { web.evaluateJavascript("window.open('https://wa.me/?text='+encodeURIComponent(${org.json.JSONObject.quote(text)}))", null) } }
+            }
+        }, "ScanPlayApp")
 
         web.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
