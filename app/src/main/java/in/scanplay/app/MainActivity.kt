@@ -57,6 +57,7 @@ class MainActivity : AppCompatActivity() {
         CookieManager.getInstance().setAcceptCookie(true); CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
         WebView.setWebContentsDebuggingEnabled(false)
         web.addJavascriptInterface(object {
+            @JavascriptInterface fun setPullRefresh(on: Boolean) { runOnUiThread { swipe.isEnabled = on && pullAllowed(web.url ?: "") } }
             @JavascriptInterface fun shareImage(b64: String, text: String) {
                 try {
                     val dir = File(cacheDir, "share").apply { mkdirs() }
@@ -84,7 +85,7 @@ class MainActivity : AppCompatActivity() {
                 // Everything else (scanplay.in, Razorpay, bank net-banking pages, YouTube embeds) stays inside the WebView
                 return false
             }
-            override fun onPageFinished(view: WebView, url: String) { swipe.isRefreshing = false; swipe.isEnabled = !url.contains("view.html") }
+            override fun onPageFinished(view: WebView, url: String) { swipe.isRefreshing = false; swipe.isEnabled = pullAllowed(url) }
         }
         web.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) {   // camera for AR
@@ -107,6 +108,8 @@ class MainActivity : AppCompatActivity() {
         handleIntent(intent) ?: web.loadUrl(home)
     }
 
+    // Pull-to-refresh only on the landing page. Studio (forms, uploads, crop), scanner and player must never be reloaded by a swipe.
+    private fun pullAllowed(url: String): Boolean { val path = Uri.parse(url).path ?: "/"; return path == "/" || path == "" || path.endsWith("/index.html") }
     private fun handleIntent(i: Intent?): Unit? { val d = i?.data ?: return null; web.loadUrl(d.toString()); return Unit }
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); handleIntent(intent) }
     @Deprecated("Deprecated in Java")
