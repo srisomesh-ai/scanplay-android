@@ -25,7 +25,12 @@ class MainActivity : AppCompatActivity() {
     private val home = "https://scanplay.in/?app=1"
 
     private val filePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
-        val uris = WebChromeClient.FileChooserParams.parseResult(r.resultCode, r.data)
+        // parseResult() only returns ONE file; multi-select comes back as clipData
+        val uris: Array<Uri>? = if (r.resultCode == RESULT_OK && r.data != null) {
+            val clip = r.data!!.clipData
+            if (clip != null && clip.itemCount > 0) Array(clip.itemCount) { i -> clip.getItemAt(i).uri }
+            else r.data!!.data?.let { arrayOf(it) }
+        } else null
         fileCallback?.onReceiveValue(uris); fileCallback = null
     }
     private val cameraPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -102,7 +107,11 @@ class MainActivity : AppCompatActivity() {
             }
             override fun onShowFileChooser(w: WebView, cb: ValueCallback<Array<Uri>>, p: FileChooserParams): Boolean {   // photo/video uploads
                 fileCallback?.onReceiveValue(null); fileCallback = cb
-                return try { filePicker.launch(p.createIntent()); true } catch (e: Exception) { fileCallback = null; false }
+                return try {
+                    val i = p.createIntent()
+                    if (p.mode == FileChooserParams.MODE_OPEN_MULTIPLE) i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                    filePicker.launch(i); true
+                } catch (e: Exception) { fileCallback = null; false }
             }
         }
         handleIntent(intent) ?: web.loadUrl(home)
