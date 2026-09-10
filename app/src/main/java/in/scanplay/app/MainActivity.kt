@@ -16,6 +16,15 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import android.graphics.Color
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 
 class MainActivity : AppCompatActivity() {
     private lateinit var web: WebView
@@ -23,6 +32,8 @@ class MainActivity : AppCompatActivity() {
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var pendingPermission: PermissionRequest? = null
     private val home = "https://scanplay.in/?app=1"
+    private var lockChecked = false          // only probe once per cold start, not on every reload
+    private var lockOverlay: View? = null
 
     private val filePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         // parseResult() only returns ONE file; multi-select comes back as clipData
@@ -90,7 +101,7 @@ class MainActivity : AppCompatActivity() {
                 // Everything else (scanplay.in, Razorpay, bank net-banking pages, YouTube embeds) stays inside the WebView
                 return false
             }
-            override fun onPageFinished(view: WebView, url: String) { swipe.isRefreshing = false; swipe.isEnabled = pullAllowed(url) }
+            override fun onPageFinished(view: WebView, url: String) { swipe.isRefreshing = false; swipe.isEnabled = pullAllowed(url); checkBiometricLock() }
         }
         web.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) {   // camera for AR
@@ -121,6 +132,43 @@ class MainActivity : AppCompatActivity() {
     private fun pullAllowed(url: String): Boolean { val path = Uri.parse(url).path ?: "/"; return path == "/" || path == "" || path.endsWith("/index.html") }
     private fun handleIntent(i: Intent?): Unit? { val d = i?.data ?: return null; web.loadUrl(d.toString()); return Unit }
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); handleIntent(intent) }
+
+    // ---- Optional fingerprint/face unlock: gates access to an ALREADY-signed-in session on this phone.
+    // Never blocks a fresh login (no session yet), and never locks anyone out if their device has no
+    // biometrics enrolled - it simply does nothing in that case. Checked once per cold start. ----
+    private fun checkBiometricLock() {
+        if (lockChecked) return; lockChecked = true
+        web.evaluateJavascript("(function(){try{return localStorage.getItem('sp_token')||''}catch(e){return ''}})();") { raw ->
+            val token = raw?.trim('"') ?: ""
+            if (token.isEmpty() || token == "null") return@evaluateJavascript
+            if (BiometricManager.from(this).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) != BiometricManager.BIOMETRIC_SUCCESS) return@evaluateJavascript
+            showLockOverlay(); promptBiometric()
+        }
+    }
+    private fun showLockOverlay() {
+        if (lockOverlay != null) return
+        val overlay = FrameLayout(this).apply { setBackgroundColor(Color.WHITE); isClickable = true; isFocusable = true }
+        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
+        col.addView(TextView(this).apply { text = "🔒"; textSize = 44f; gravity = Gravity.CENTER })
+        col.addView(TextView(this).apply { text = "Unlock ScanPlay"; textSize = 18f; setPadding(0, 32, 0, 8); gravity = Gravity.CENTER; setTextColor(0xFF141032.toInt()) })
+        val retry = TextView(this).apply { text = "Tap to unlock"; textSize = 14f; setTextColor(0xFF7C3AED.toInt()); setPadding(0, 12, 0, 0); gravity = Gravity.CENTER; setOnClickListener { promptBiometric() } }
+        col.addView(retry)
+        overlay.addView(col, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        addContentView(overlay, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        lockOverlay = overlay
+    }
+    private fun hideLockOverlay() { lockOverlay?.let { (it.parent as? ViewGroup)?.removeView(it) }; lockOverlay = null }
+    private fun promptBiometric() {
+        val prompt = BiometricPrompt(this, ContextCompat.getMainExecutor(this), object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) { hideLockOverlay() }
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) { if (errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON) hideLockOverlay() }
+            // a failed attempt (wrong finger) does nothing here - the system dialog itself lets them retry, overlay just stays up
+        })
+        val info = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Unlock ScanPlay").setSubtitle("Use your fingerprint or face to continue")
+            .setNegativeButtonText("Use password instead").build()
+        prompt.authenticate(info)
+    }
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() { if (web.canGoBack()) web.goBack() else super.onBackPressed() }
     override fun onPause() { super.onPause(); web.onPause() }
