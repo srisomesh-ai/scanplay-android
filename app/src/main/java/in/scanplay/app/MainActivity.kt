@@ -53,6 +53,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         web = findViewById(R.id.web); swipe = findViewById(R.id.swipe)
+        web.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)   // AR camera feed + WebGL + video-as-texture needs this explicitly, not just the app-level flag
         // Android 15 draws edge-to-edge: keep web content clear of the status bar and navigation bar
         ViewCompat.setOnApplyWindowInsetsListener(swipe) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
