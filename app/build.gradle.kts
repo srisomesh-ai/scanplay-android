@@ -1,7 +1,7 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
 android {
     namespace = "in.scanplay.app"; compileSdk = 36
-    defaultConfig { applicationId = "in.scanplay.app"; minSdk = 24; targetSdk = 36; versionCode = 12; versionName = "1.2.0" }
+    defaultConfig { applicationId = "in.scanplay.app"; minSdk = 24; targetSdk = 36; versionCode = 13; versionName = "1.2.1" }
     signingConfigs { create("release") {
         val ks = System.getenv("KEYSTORE_PATH")
         if (ks != null) { storeFile = file(ks); storePassword = System.getenv("KEYSTORE_PASSWORD"); keyAlias = System.getenv("KEY_ALIAS"); keyPassword = System.getenv("KEY_PASSWORD") } } }

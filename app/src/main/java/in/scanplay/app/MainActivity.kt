@@ -84,6 +84,27 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread { startActivity(Intent.createChooser(i, "Share")) }
                 } catch (e: Exception) { runOnUiThread { web.evaluateJavascript("window.open('https://wa.me/?text='+encodeURIComponent(${org.json.JSONObject.quote(text)}))", null) } }
             }
+            // Save a picture (e.g. the QR card) to the phone's gallery: Photos / Gallery > Pictures > ScanPlay.
+            // Android 10+ needs no permission for this. Older phones return false and the page shares the picture instead.
+            @JavascriptInterface fun saveImage(b64: String, name: String): Boolean {
+                if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) return false
+                return try {
+                    val bytes = Base64.decode(b64, Base64.DEFAULT)
+                    val safe = name.replace(Regex("[^A-Za-z0-9._ -]"), "").trim().ifEmpty { "ScanPlay-QR.png" }
+                    val mime = if (safe.endsWith(".jpg", true) || safe.endsWith(".jpeg", true)) "image/jpeg" else "image/png"
+                    val values = android.content.ContentValues().apply {
+                        put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, safe)
+                        put(android.provider.MediaStore.Images.Media.MIME_TYPE, mime)
+                        put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/ScanPlay")
+                        put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
+                    }
+                    val uri = contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return false
+                    contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: return false
+                    values.clear(); values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 0); contentResolver.update(uri, values, null, null)
+                    runOnUiThread { android.widget.Toast.makeText(this@MainActivity, "Saved to Photos › ScanPlay", android.widget.Toast.LENGTH_LONG).show() }
+                    true
+                } catch (e: Exception) { false }
+            }
         }, "ScanPlayApp")
 
         web.webViewClient = object : WebViewClient() {
